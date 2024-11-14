@@ -1,184 +1,421 @@
-import numpy as np
-import streamlit as st
-import matplotlib.pyplot as plt
+#!/usr/bin/env python3
+from typing import List, Set
+from dataclasses import dataclass
+import pygame
+from enum import Enum, unique
+import sys
+import random
+
+import heapq
+from collections import deque
+from itertools import count
 
 
-class ShallowNeuralNetwork:
-    def __init__(self, input_size, hidden_layers, output_size=2, learning_rate=0.01, activation_functions=None):
-        self.learning_rate = learning_rate
-        self.activation_functions = activation_functions or ['sigmoid'] * len(hidden_layers)
-        self.layers = []
-        prev_size = input_size
-        for hidden_size in hidden_layers:
-            self.layers.append(self.initialize_layer(prev_size, hidden_size))
-            prev_size = hidden_size
-        self.layers.append(self.initialize_layer(prev_size, output_size))
+FPS = 10
 
-    def initialize_layer(self, input_size, output_size):
-        limit = np.sqrt(6 / (input_size + output_size))
-        weights = np.random.uniform(-limit, limit, size=(input_size, output_size))
-        biases = np.zeros(output_size)
-        return {'weights': weights, 'biases': biases}
+INIT_LENGTH = 4
 
-    def activate(self, x, activation_fn):
-        if activation_fn == 'sigmoid':
-            return 1 / (1 + np.exp(-x))
-        elif activation_fn == 'heaviside':
-            return np.where(x >= 0, 1, 0)
-        elif activation_fn == 'relu':
-            return np.maximum(0, x)
-        elif activation_fn == 'leaky_relu':
-            return np.where(x > 0, x, 0.01 * x)
-        elif activation_fn == 'tanh':
-            return np.tanh(x)
-        elif activation_fn == 'sin':
-            return np.sin(x)
-        elif activation_fn == 'sign':
-            return np.sign(x)
+WIDTH = 480
+HEIGHT = 480
+GRID_SIDE = 24
+GRID_WIDTH = WIDTH // GRID_SIDE
+GRID_HEIGHT = HEIGHT // GRID_SIDE
 
-    def activation_derivative(self, x, activation_fn):
-        if activation_fn == 'sigmoid':
-            return x * (1 - x)
-        elif activation_fn == 'heaviside':
-            return 1
-        elif activation_fn == 'relu':
-            return np.where(x > 0, 1, 0)
-        elif activation_fn == 'leaky_relu':
-            return np.where(x > 0, 1, 0.01)
-        elif activation_fn == 'tanh':
-            return 1 - np.tanh(x) ** 2
-        elif activation_fn == 'sin':
-            return np.cos(x)
-        elif activation_fn == 'sign':
-            return 1
+BRIGHT_BG = (103, 223, 235)
+DARK_BG = (78, 165, 173)
 
-    def softmax(self, x):
-        exp_x = np.exp(x - np.max(x))
-        return exp_x / np.sum(exp_x, axis=0)
+SNAKE_COL = (6, 38, 7)
+FOOD_COL = (224, 160, 38)
+OBSTACLE_COL = (209, 59, 59)
+VISITED_COL = (24, 42, 142)
 
 
-    def forward(self, inputs):
-        activations = inputs
-        for i, layer in enumerate(self.layers[:-1]):
-            z = np.dot(activations, layer['weights']) + layer['biases']
-            activations = self.activate(z, self.activation_functions[i])
-            layer['activations'] = activations
-            layer['z'] = z
+@unique
+class Direction(tuple, Enum):
+    UP = (0, -1)
+    DOWN = (0, 1)
+    LEFT = (-1, 0)
+    RIGHT = (1, 0)
 
-        output_layer = self.layers[-1]
-        z = np.dot(activations, output_layer['weights']) + output_layer['biases']
-        activations = self.softmax(z)
-        output_layer['activations'] = activations
-        output_layer['z'] = z
-        return activations
+    def reverse(self):
+        x, y = self.value
+        return Direction((x * -1, y * -1))
 
 
-    def backward(self, inputs, expected_output):
-        deltas = []
-        output = self.layers[-1]['activations']
-        error = expected_output - output
-        delta = error * self.activation_derivative(output, 'sigmoid')
-        deltas.append(delta)
+@dataclass
+class Position:
+    x: int
+    y: int
 
-        for i in reversed(range(len(self.layers) - 1)):
-            layer = self.layers[i]
-            next_layer = self.layers[i + 1]
-            activation_fn = self.activation_functions[i]
-            delta = np.dot(deltas[-1], next_layer['weights'].T) * self.activation_derivative(layer['activations'],
-                                                                                             activation_fn)
-            deltas.append(delta)
+    def check_bounds(self, width: int, height: int):
+        return (self.x >= width) or (self.x < 0) or (self.y >= height) or (self.y < 0)
 
-        deltas.reverse()
-        activation = inputs
-        for i in range(len(self.layers)):
-            layer = self.layers[i]
-            delta = deltas[i]
-            layer['weights'] += self.learning_rate * np.outer(activation, delta)
-            layer['biases'] += self.learning_rate * delta
-            activation = layer['activations']
+    def draw_node(self, surface: pygame.Surface, color: tuple, background: tuple):
+        r = pygame.Rect(
+            (int(self.x * GRID_SIDE), int(self.y * GRID_SIDE)), (GRID_SIDE, GRID_SIDE)
+        )
+        pygame.draw.rect(surface, color, r)
+        pygame.draw.rect(surface, background, r, 1)
 
-    def train(self, inputs, expected_output, epochs=1000):
-        for epoch in range(epochs):
-            for x, d in zip(inputs, expected_output):
-                self.forward(x)
-                self.backward(x, d)
-
-
-def generate_class_data(num_modes, num_samples, class_label, activation_function):
-    x_data = []
-    y_data = []
-    labels = []
-
-    for mode in range(num_modes):
-        mean_x = np.random.uniform(-1, 1)
-        mean_y = np.random.uniform(-1, 1)
-        variance_x = np.random.uniform(0.05, 0.5)
-        variance_y = np.random.uniform(0.05, 0.5)
-        x_mode = np.random.normal(mean_x, variance_x, num_samples)
-        y_mode = np.random.normal(mean_y, variance_y, num_samples)
-        x_data.extend(x_mode)
-        y_data.extend(y_mode)
-        if activation_function in ['tanh', 'sin', 'sign']:
-            if class_label == 0:
-                labels.extend([[-1, 1]] * num_samples)
-            else:
-                labels.extend([[1, -1]] * num_samples)
+    def __eq__(self, o: object) -> bool:
+        if isinstance(o, Position):
+            return (self.x == o.x) and (self.y == o.y)
         else:
-            if class_label == 0:
-                labels.extend([[1, 0]] * num_samples)
-            else:
-                labels.extend([[0, 1]] * num_samples)
+            return False
 
-    return x_data, y_data, labels
+    def __str__(self):
+        return f"X{self.x};Y{self.y};"
 
-
-def main():
-    st.title("Shallow Neural Network")
-
-    num_modes_blue = st.sidebar.text_input("Number of Modes Red", value=1)
-    num_modes_red = st.sidebar.text_input("Number of Modes Blue", value=1)
-    num_samples = st.sidebar.text_input("Number of Samples per Mode", value=50)
-    num_hidden_layers = st.sidebar.slider("Number of Hidden Layers", 2, 5, 3)
-    neurons_per_layer = st.sidebar.slider("Neurons per Hidden Layer", 1, 10, 5)
-    activation_fun = ["sigmoid", "heaviside", "relu", "leaky_relu", "tanh", "sin", "sign"]
-    activation_fn = []
-    for i in range(num_hidden_layers):
-        selected_activation = st.sidebar.selectbox(f"Activation for Layer {i + 1}", activation_fun, index=0)
-        activation_fn.append(selected_activation)
+    def __hash__(self):
+        return hash(str(self))
 
 
-    learning_rate = st.sidebar.slider("Learning Rate", 0.01, 1.0, 1.0)
-    epochs = st.sidebar.slider("Epochs", 1, 1000, 100)
+class GameNode:
+    nodes: Set[Position] = set()
 
-    if st.sidebar.button("Generate & Train Neuron"):
-        x_class0, y_class0, labels_class0 = generate_class_data(int(num_modes_blue), int(num_samples), class_label=0,                                                      activation_function='sigmoid')
-        x_class1, y_class1, labels_class1 = generate_class_data(int(num_modes_red), int(num_samples), class_label=1,
-                                                                activation_function='sigmoid')
+    def __init__(self):
+        self.position = Position(0, 0)
+        self.color = (0, 0, 0)
 
-        x_data = np.column_stack((x_class0 + x_class1, y_class0 + y_class1))
-        labels = np.array(labels_class0 + labels_class1)
+    def randomize_position(self):
+        try:
+            GameNode.nodes.remove(self.position)
+        except KeyError:
+            pass
 
-        hidden_layers = [neurons_per_layer] * num_hidden_layers
-        nn = ShallowNeuralNetwork(input_size=2, hidden_layers=hidden_layers, output_size=2,
-                                  learning_rate=learning_rate, activation_functions=activation_fn)
-        nn.train(x_data, labels, epochs=epochs)
+        condidate_position = Position(
+            random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1),
+        )
 
-        xx, yy = np.meshgrid(np.linspace(min(x_class0 + x_class1), max(x_class0 + x_class1), 200),
-                             np.linspace(min(y_class0 + y_class1), max(y_class0 + y_class1), 200))
-        grid_points = np.stack([xx.flatten(), yy.flatten()], axis=1)
-        zz = np.array([nn.forward(point)[1] for point in grid_points])
-        zz = zz.reshape(xx.shape)
+        if condidate_position not in GameNode.nodes:
+            self.position = condidate_position
+            GameNode.nodes.add(self.position)
+        else:
+            self.randomize_position()
 
-        plt.contourf(xx, yy, zz, levels=50, cmap="RdBu", alpha=0.6)
-        # plt.contourf(xx, yy, zz, alpha=0.8, cmap=plt.cm.coolwarm)
-        plt.scatter(x_class0, y_class0, color="red", label="Class 0")
-        plt.scatter(x_class1, y_class1, color="blue", label="Class 1")
-        plt.legend()
-        plt.xlabel("X-axis")
-        plt.ylabel("Y-axis")
+    def draw(self, surface: pygame.Surface):
+        self.position.draw_node(surface, self.color, BRIGHT_BG)
 
-        st.pyplot(plt)
+
+class Food(GameNode):
+    def __init__(self):
+        super(Food, self).__init__()
+        self.color = FOOD_COL
+        self.randomize_position()
+
+
+class Obstacle(GameNode):
+    def __init__(self):
+        super(Obstacle, self).__init__()
+        self.color = OBSTACLE_COL
+        self.randomize_position()
+
+
+class Snake:
+    def __init__(self, screen_width, screen_height, init_length):
+        self.color = SNAKE_COL
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.init_length = init_length
+        self.reset()
+
+    def reset(self):
+        self.length = self.init_length
+        self.positions = [Position((GRID_SIDE // 2), (GRID_SIDE // 2))]
+        self.direction = random.choice([e for e in Direction])
+        self.score = 0
+        self.hasReset = True
+
+    def get_head_position(self) -> Position:
+        return self.positions[0]
+
+    def turn(self, direction: Direction):
+        if self.length > 1 and direction.reverse() == self.direction:
+            return
+        else:
+            self.direction = direction
+
+    def move(self):
+        self.hasReset = False
+        cur = self.get_head_position()
+        x, y = self.direction.value
+        new = Position(cur.x + x, cur.y + y,)
+        if self.collide(new):
+            self.reset()
+        else:
+            self.positions.insert(0, new)
+            while len(self.positions) > self.length:
+                self.positions.pop()
+
+    def collide(self, new: Position):
+        return (new in self.positions) or (new.check_bounds(GRID_WIDTH, GRID_HEIGHT))
+
+    def eat(self, food: Food):
+        if self.get_head_position() == food.position:
+            self.length += 1
+            self.score += 1
+            while food.position in self.positions:
+                food.randomize_position()
+
+    def hit_obstacle(self, obstacle: Obstacle):
+        if self.get_head_position() == obstacle.position:
+            self.length -= 1
+            self.score -= 1
+            if self.length == 0:
+                self.reset()
+
+    def draw(self, surface: pygame.Surface):
+        for p in self.positions:
+            p.draw_node(surface, self.color, BRIGHT_BG)
+
+
+class Player:
+    def __init__(self) -> None:
+        self.visited_color = VISITED_COL
+        self.visited: Set[Position] = set()
+        self.chosen_path: List[Direction] = []
+
+    def move(self, snake: Snake) -> bool:
+        try:
+            next_step = self.chosen_path.pop(0)
+            snake.turn(next_step)
+            return False
+        except IndexError:
+            return True
+
+    def search_path(self, snake: Snake, food: Food, *obstacles: Set[Obstacle]):
+        """
+        Do nothing, control is defined in derived classes
+        """
+        pass
+
+    def turn(self, direction: Direction):
+        """
+        Do nothing, control is defined in derived classes
+        """
+        pass
+
+    def draw_visited(self, surface: pygame.Surface):
+        for p in self.visited:
+            p.draw_node(surface, self.visited_color, BRIGHT_BG)
+
+
+class SnakeGame:
+    def __init__(self, snake: Snake, player: Player) -> None:
+        pygame.init()
+        pygame.display.set_caption("AIFundamentals - SnakeGame")
+
+        self.snake = snake
+        self.food = Food()
+        self.obstacles: Set[Obstacle] = set()
+        for _ in range(40):
+            ob = Obstacle()
+            while any([ob.position == o.position for o in self.obstacles]):
+                ob.randomize_position()
+            self.obstacles.add(ob)
+
+        self.player = player
+
+        self.fps_clock = pygame.time.Clock()
+
+        self.screen = pygame.display.set_mode(
+            (snake.screen_height, snake.screen_width), 0, 32
+        )
+        self.surface = pygame.Surface(self.screen.get_size()).convert()
+        self.myfont = pygame.font.SysFont("monospace", 16)
+
+    def drawGrid(self):
+        for y in range(0, int(GRID_HEIGHT)):
+            for x in range(0, int(GRID_WIDTH)):
+                p = Position(x, y)
+                if (x + y) % 2 == 0:
+                    p.draw_node(self.surface, BRIGHT_BG, BRIGHT_BG)
+                else:
+                    p.draw_node(self.surface, DARK_BG, DARK_BG)
+
+    def run(self):
+        while not self.handle_events():
+            self.fps_clock.tick(FPS)
+            self.drawGrid()
+            if self.player.move(self.snake) or self.snake.hasReset:
+                self.player.search_path(self.snake, self.food, self.obstacles)
+                self.player.move(self.snake)
+            self.snake.move()
+            self.snake.eat(self.food)
+            for ob in self.obstacles:
+                self.snake.hit_obstacle(ob)
+            for ob in self.obstacles:
+                ob.draw(self.surface)
+            self.player.draw_visited(self.surface)
+            self.snake.draw(self.surface)
+            self.food.draw(self.surface)
+            self.screen.blit(self.surface, (0, 0))
+            text = self.myfont.render(
+                "Score {0}".format(self.snake.score), 1, (0, 0, 0)
+            )
+            self.screen.blit(text, (5, 10))
+            pygame.display.update()
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+                if event.key == pygame.K_UP:
+                    self.player.turn(Direction.UP)
+                elif event.key == pygame.K_DOWN:
+                    self.player.turn(Direction.DOWN)
+                elif event.key == pygame.K_LEFT:
+                    self.player.turn(Direction.LEFT)
+                elif event.key == pygame.K_RIGHT:
+                    self.player.turn(Direction.RIGHT)
+        return False
+
+
+class HumanPlayer(Player):
+    def __init__(self):
+        super(HumanPlayer, self).__init__()
+
+    def turn(self, direction: Direction):
+        self.chosen_path.append(direction)
+
+
+# ----------------------------------
+# DO NOT MODIFY CODE ABOVE THIS LINE
+# ----------------------------------
+# class SearchBasedPlayer(Player):
+#     def __init__(self):
+#         super(SearchBasedPlayer, self).__init__()
+#
+#     def search_path(self, snake: Snake, food: Food, *obstacles: Set[Obstacle]):
+#         # self.generate_states...
+#         # ...
+#         pass
+
+
+class SearchBasedPlayer(Player):
+    def __init__(self, algorithm="bfs"):
+        super(SearchBasedPlayer, self).__init__()
+        self.algorithm = algorithm.lower()
+
+    def search_path(self, snake: Snake, food: Food, obstacles: Set[Obstacle]):
+        start = snake.get_head_position()
+        target = food.position
+        obstacles_positions = {ob.position for ob in obstacles}
+
+        if self.algorithm == "bfs":
+            self.chosen_path = self.bfs(start, target, obstacles_positions)
+        elif self.algorithm == "dfs":
+            self.chosen_path = self.dfs(start, target, obstacles_positions)
+        elif self.algorithm == "dijkstra":
+            self.chosen_path = self.dijkstra(start, target, obstacles_positions)
+        elif self.algorithm == "a_star":
+            self.chosen_path = self.a_star(start, target, obstacles_positions)
+        else:
+            self.chosen_path = []
+
+    def get_neighbors(self, position):
+        neighbors = []
+        for direction in Direction:
+            new_position = Position(position.x + direction.value[0], position.y + direction.value[1])
+            if not new_position.check_bounds(GRID_WIDTH, GRID_HEIGHT):
+                neighbors.append((new_position, direction))
+        return neighbors
+
+    def bfs(self, start, target, obstacles):
+        queue = deque([(start, [])])
+        visited = set()
+        while queue:
+            current, path = queue.popleft()
+            if current in visited:
+                continue
+            visited.add(current)
+            self.visited.add(current)
+            if current == target:
+                return path
+            for neighbor, direction in self.get_neighbors(current):
+                if neighbor not in visited and neighbor not in obstacles:
+                    queue.append((neighbor, path + [direction]))
+        return []
+
+    def dfs(self, start, target, obstacles):
+        stack = [(start, [])]
+        visited = set()
+        while stack:
+            current, path = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            self.visited.add(current)
+            if current == target:
+                return path
+            for neighbor, direction in self.get_neighbors(current):
+                if neighbor not in visited and neighbor not in obstacles:
+                    stack.append((neighbor, path + [direction]))
+        return []
+
+    def dijkstra(self, start, target, obstacles):
+        counter = count()  # Unique sequence count for secondary comparison in heap
+        pq = [(0, next(counter), start, [])]  # Priority queue with (cost, count, position, path)
+        costs = {start: 0}
+        visited = set()
+
+        while pq:
+            cost, _, current, path = heapq.heappop(pq)  # Only 'cost' and 'count' are compared
+            if current in visited:
+                continue
+            visited.add(current)
+            self.visited.add(current)  # Mark current node as visited for visualization
+
+            if current == target:
+                return path  # Return the path if target is reached
+
+            for neighbor, direction in self.get_neighbors(current):
+                # Assign higher cost to avoid obstacles
+                new_cost = cost + (5 if neighbor in obstacles else 1)
+                if neighbor not in costs or new_cost < costs[neighbor]:
+                    costs[neighbor] = new_cost
+                    # Push (new_cost, next(counter), neighbor, path + [direction])
+                    heapq.heappush(pq, (new_cost, next(counter), neighbor, path + [direction]))
+
+        return []  # Return an empty path if no path is found
+
+    def a_star(self, start, target, obstacles):
+        counter = count()  # Counter to ensure unique priority for heapq
+        pq = [(0, next(counter), start, [])]
+        g_costs = {start: 0}
+        visited = set()
+
+        while pq:
+            f_cost, _, current, path = heapq.heappop(pq)  # Ignore the counter when popping
+            if current in visited:
+                continue
+            visited.add(current)
+            self.visited.add(current)
+
+            if current == target:
+                return path
+
+            for neighbor, direction in self.get_neighbors(current):
+                # Cost of movement: 5 if obstacle, 1 if clear
+                new_g_cost = g_costs[current] + (5 if neighbor in obstacles else 1)
+                h_cost = abs(neighbor.x - target.x) + abs(neighbor.y - target.y)
+                f_cost = new_g_cost + h_cost
+
+                if neighbor not in g_costs or new_g_cost < g_costs[neighbor]:
+                    g_costs[neighbor] = new_g_cost
+                    heapq.heappush(pq, (f_cost, next(counter), neighbor, path + [direction]))
+
+        return []
 
 
 if __name__ == "__main__":
-    main()
+    snake = Snake(WIDTH, WIDTH, INIT_LENGTH)
+    player = SearchBasedPlayer("dijkstra")  # Choose "bfs", "dfs", "dijkstra", or "a_star"
+    # player = SearchBasedPlayer()
+    game = SnakeGame(snake, player)
+    game.run()
