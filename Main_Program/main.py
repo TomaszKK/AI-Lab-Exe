@@ -6,12 +6,8 @@ from enum import Enum, unique
 import sys
 import random
 
-import heapq
-from collections import deque
-from itertools import count
 
-
-FPS = 10
+FPS = 30
 
 INIT_LENGTH = 4
 
@@ -296,6 +292,10 @@ class HumanPlayer(Player):
 #         # ...
 #         pass
 
+import heapq
+from collections import deque
+from itertools import count
+
 
 class SearchBasedPlayer(Player):
     def __init__(self, algorithm="bfs"):
@@ -308,7 +308,7 @@ class SearchBasedPlayer(Player):
         obstacles_positions = {ob.position for ob in obstacles}
 
         if self.algorithm == "bfs":
-            self.chosen_path = self.bfs(start, target, obstacles_positions)
+            self.bfs(snake, food, obstacles)
         elif self.algorithm == "dfs":
             self.chosen_path = self.dfs(start, target, obstacles_positions)
         elif self.algorithm == "dijkstra":
@@ -326,17 +326,29 @@ class SearchBasedPlayer(Player):
                 neighbors.append((new_position, direction))
         return neighbors
 
-    def bfs(self, start, target, obstacles):
+    def bfs(self, snake: Snake, food: Food, obstacles: Set[Obstacle]):
+        self.visited.clear()
+        self.chosen_path.clear()
+
+        start = snake.get_head_position()
+        target = food.position
+        obstacle_positions = {ob.position for ob in obstacles}
+        self.chosen_path = self.bfs_search(start, target, obstacle_positions)
+
+    def bfs_search(self, start, target, obstacles):
         queue = deque([(start, [])])
         visited = set()
+
         while queue:
             current, path = queue.popleft()
             if current in visited:
                 continue
             visited.add(current)
             self.visited.add(current)
+
             if current == target:
                 return path
+
             for neighbor, direction in self.get_neighbors(current):
                 if neighbor not in visited and neighbor not in obstacles:
                     queue.append((neighbor, path + [direction]))
@@ -345,77 +357,89 @@ class SearchBasedPlayer(Player):
     def dfs(self, start, target, obstacles):
         stack = [(start, [])]
         visited = set()
+
         while stack:
             current, path = stack.pop()
+
             if current in visited:
                 continue
+
             visited.add(current)
             self.visited.add(current)
+
             if current == target:
                 return path
+
             for neighbor, direction in self.get_neighbors(current):
                 if neighbor not in visited and neighbor not in obstacles:
                     stack.append((neighbor, path + [direction]))
+
         return []
 
     def dijkstra(self, start, target, obstacles):
-        counter = count()  # Unique sequence count for secondary comparison in heap
-        pq = [(0, next(counter), start, [])]  # Priority queue with (cost, count, position, path)
-        costs = {start: 0}
+        counter = count()
+        to_visit = [(0, next(counter), start, [])]
+        cost_map = {start: 0}
         visited = set()
 
-        while pq:
-            cost, _, current, path = heapq.heappop(pq)  # Only 'cost' and 'count' are compared
-            if current in visited:
+        while to_visit:
+            current_cost, _counter, current_position, path = heapq.heappop(to_visit)
+
+            if current_position in visited:
                 continue
-            visited.add(current)
-            self.visited.add(current)  # Mark current node as visited for visualization
+            visited.add(current_position)
+            self.visited.add(current_position)
 
-            if current == target:
-                return path  # Return the path if target is reached
+            if current_position == target:
+                return path
 
-            for neighbor, direction in self.get_neighbors(current):
-                # Assign higher cost to avoid obstacles
-                new_cost = cost + (5 if neighbor in obstacles else 1)
-                if neighbor not in costs or new_cost < costs[neighbor]:
-                    costs[neighbor] = new_cost
-                    # Push (new_cost, next(counter), neighbor, path + [direction])
-                    heapq.heappush(pq, (new_cost, next(counter), neighbor, path + [direction]))
+            for neighbor, direction in self.get_neighbors(current_position):
+                if neighbor in visited or neighbor in obstacles:
+                    continue
 
-        return []  # Return an empty path if no path is found
+                new_cost = current_cost + 1
+
+                if neighbor not in cost_map or new_cost < cost_map[neighbor]:
+                    cost_map[neighbor] = new_cost
+                    heapq.heappush(to_visit, (new_cost, next(counter), neighbor, path + [direction]))
+        return []
 
     def a_star(self, start, target, obstacles):
-        counter = count()  # Counter to ensure unique priority for heapq
+        counter = count()
+
         pq = [(0, next(counter), start, [])]
+
         g_costs = {start: 0}
-        visited = set()
+        self.visited.clear()
 
         while pq:
-            f_cost, _, current, path = heapq.heappop(pq)  # Ignore the counter when popping
-            if current in visited:
+            f_cost, _, current, path = heapq.heappop(pq)
+
+            if current in self.visited:
                 continue
-            visited.add(current)
+
             self.visited.add(current)
 
             if current == target:
                 return path
 
             for neighbor, direction in self.get_neighbors(current):
-                # Cost of movement: 5 if obstacle, 1 if clear
                 new_g_cost = g_costs[current] + (5 if neighbor in obstacles else 1)
+
                 h_cost = abs(neighbor.x - target.x) + abs(neighbor.y - target.y)
-                f_cost = new_g_cost + h_cost
+
+                new_f_cost = new_g_cost + h_cost
 
                 if neighbor not in g_costs or new_g_cost < g_costs[neighbor]:
                     g_costs[neighbor] = new_g_cost
-                    heapq.heappush(pq, (f_cost, next(counter), neighbor, path + [direction]))
+                    heapq.heappush(pq, (new_f_cost, next(counter), neighbor, path + [direction]))
 
         return []
 
 
 if __name__ == "__main__":
     snake = Snake(WIDTH, WIDTH, INIT_LENGTH)
-    player = SearchBasedPlayer("dijkstra")  # Choose "bfs", "dfs", "dijkstra", or "a_star"
+    player = SearchBasedPlayer("dfs")  # Choose "bfs", "dfs", "dijkstra", or "a_star"
     # player = SearchBasedPlayer()
     game = SnakeGame(snake, player)
     game.run()
