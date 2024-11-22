@@ -7,7 +7,7 @@ import sys
 import random
 
 
-FPS = 30
+FPS = 15
 
 INIT_LENGTH = 4
 
@@ -397,12 +397,13 @@ class SearchBasedPlayer(Player):
                 if neighbor in visited or neighbor in obstacles:
                     continue
 
-                new_cost = current_cost + 1
+                new_cost = current_cost + (5 if neighbor in obstacles else 1)
 
                 if neighbor not in cost_map or new_cost < cost_map[neighbor]:
                     cost_map[neighbor] = new_cost
                     heapq.heappush(to_visit, (new_cost, next(counter), neighbor, path + [direction]))
         return []
+
 
     def a_star(self, start, target, obstacles):
         counter = count()
@@ -425,9 +426,7 @@ class SearchBasedPlayer(Player):
 
             for neighbor, direction in self.get_neighbors(current):
                 new_g_cost = g_costs[current] + (5 if neighbor in obstacles else 1)
-
                 h_cost = abs(neighbor.x - target.x) + abs(neighbor.y - target.y)
-
                 new_f_cost = new_g_cost + h_cost
 
                 if neighbor not in g_costs or new_g_cost < g_costs[neighbor]:
@@ -439,7 +438,7 @@ class SearchBasedPlayer(Player):
 
 if __name__ == "__main__":
     snake = Snake(WIDTH, WIDTH, INIT_LENGTH)
-    player = SearchBasedPlayer("dfs")  # Choose "bfs", "dfs", "dijkstra", or "a_star"
+    player = SearchBasedPlayer("dijkstra")  # Choose "bfs", "dfs", "dijkstra", or "a_star"
     # player = SearchBasedPlayer()
     game = SnakeGame(snake, player)
     game.run()
