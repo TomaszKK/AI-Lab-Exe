@@ -305,7 +305,8 @@ class SearchBasedPlayer(Player):
     def search_path(self, snake: Snake, food: Food, obstacles: Set[Obstacle]):
         start = snake.get_head_position()
         target = food.position
-        obstacles_positions = {ob.position for ob in obstacles}
+        snake_body_positions = {pos for pos in snake.positions}
+        obstacles_positions = {ob.position for ob in obstacles} | snake_body_positions
 
         if self.algorithm == "bfs":
             self.bfs(snake, food, obstacles)
@@ -438,7 +439,10 @@ class SearchBasedPlayer(Player):
 
 if __name__ == "__main__":
     snake = Snake(WIDTH, WIDTH, INIT_LENGTH)
-    player = SearchBasedPlayer("dijkstra")  # Choose "bfs", "dfs", "dijkstra", or "a_star"
+    player = SearchBasedPlayer("bfs")
+    # player = SearchBasedPlayer("dfs")
+    # player = SearchBasedPlayer("dijkstra")
+    # player = SearchBasedPlayer("a_star")
     # player = SearchBasedPlayer()
     game = SnakeGame(snake, player)
     game.run()
