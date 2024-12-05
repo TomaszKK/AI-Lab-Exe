@@ -315,35 +315,39 @@ class FuzzyPlayerTSK(Player):
     def __init__(self, racket: Racket, ball: Ball, board: Board):
         super(FuzzyPlayerTSK, self).__init__(racket, ball, board)
 
-        # Universe for x_diff and y_diff
         self.x_universe = np.arange(-400, 401, 1)
-        self.y_universe = np.arange(-200, 201, 1)
-        self.velocity_universe = np.arange(-10, 11, 1)
+        self.y_universe = np.arange(0, 401, 1)
+        self.velocity_universe = np.arange(-20, 21, 1)
 
         self.x_mf = {
             "far_left": fuzz.trimf(self.x_universe, [-400, -400, 0]),
-            "center": fuzz.trimf(self.x_universe, [-100, 0, 100]),
+            "left": fuzz.trimf(self.x_universe, [-400, -200, 0]),
+            "center": fuzz.trimf(self.x_universe, [-10, 0, 10]),
+            "right": fuzz.trimf(self.x_universe, [0, 200, 400]),
             "far_right": fuzz.trimf(self.x_universe, [0, 400, 400]),
         }
 
-
         self.y_mf = {
-            "high": fuzz.trimf(self.y_universe, [-200, -200, 0]),
-            "center": fuzz.trimf(self.y_universe, [-200, 0, 200]),
-            "low": fuzz.trimf(self.y_universe, [0, 200, 200]),
+            "high": fuzz.trimf(self.y_universe, [200, 400, 400]),
+            "center": fuzz.trimf(self.y_universe, [0, 200, 400]),
+            "low": fuzz.trimf(self.y_universe, [0, 0, 200]),
         }
 
         self.velocity_mf = {
-            "move_slow_left": fuzz.trimf(self.velocity_universe, [-10, -10, 0]),
-            "stay": fuzz.trimf(self.velocity_universe, [-1, 0, 1]),
-            "move_slow_right": fuzz.trimf(self.velocity_universe, [0, 10, 10]),
+            "move_slow_left": fuzz.trimf(self.velocity_universe, [-20, -20, -15]),
+            "left": fuzz.trimf(self.velocity_universe, [-15, -10, -2]),
+            "stay": fuzz.trimf(self.velocity_universe, [-2, 0, 2]),
+            "right": fuzz.trimf(self.velocity_universe, [2, 10, 15]),
+            "move_slow_right": fuzz.trimf(self.velocity_universe, [15, 20, 20]),
         }
+
         self.visualize_mfs()
 
-        # Velocity functions based on x_diff and y_diff
         self.velocity_fx = {
             "move_slow_left": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
+            "left": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
             "stay": lambda x_diff, y_diff: 0,
+            "right": lambda x_diff, y_diff: abs(x_diff) + y_diff,
             "move_slow_right": lambda x_diff, y_diff: (abs(x_diff) + y_diff),
         }
 
@@ -353,7 +357,6 @@ class FuzzyPlayerTSK(Player):
         self.move(self.racket.rect.x + velocity)
 
     def make_decision(self, x_diff: int, y_diff: int):
-        # Compute the membership values for x_diff and y_diff
         x_vals = {
             name: fuzz.interp_membership(self.x_universe, mf, x_diff)
             for name, mf in self.x_mf.items()
@@ -373,11 +376,25 @@ class FuzzyPlayerTSK(Player):
                     min(x_vals["far_left"], y_vals["low"]),
                 ]
             ),
+            "right": max(
+                [
+                    min(x_vals["left"], y_vals["high"]),
+                    min(x_vals["left"], y_vals["center"]),
+                    min(x_vals["left"], y_vals["low"]),
+                ]
+            ),
             "stay": max(
                 [
                     min(x_vals["center"], y_vals["high"]),
                     min(x_vals["center"], y_vals["center"]),
                     min(x_vals["center"], y_vals["low"]),
+                ]
+            ),
+            "left": max(
+                [
+                    min(x_vals["right"], y_vals["high"]),
+                    min(x_vals["right"], y_vals["center"]),
+                    min(x_vals["right"], y_vals["low"]),
                 ]
             ),
             "move_slow_left": max(
@@ -429,13 +446,11 @@ class FuzzyPlayerTSK(Player):
         plt.legend()
         plt.show(block=False)
 
-        # Show the plots
 
-        # plt.show(block=False)
 
 
 if __name__ == "__main__":
-    # game = PongGame(800, 400, NaiveOponent, HumanPlayer)
-    game = PongGame(800, 400, NaiveOponent, FuzzyPlayerMamdami)
-    # game = PongGame(800, 400, NaiveOponent, FuzzyPlayerTSK)
+# game = PongGame(800, 400, NaiveOponent, HumanPlayer)
+#     game = PongGame(800, 400, NaiveOponent, FuzzyPlayerMamdami)
+    game = PongGame(800, 400, NaiveOponent, FuzzyPlayerTSK)
     game.run()
