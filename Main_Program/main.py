@@ -334,23 +334,27 @@ class FuzzyPlayerTSK(Player):
         }
 
         self.velocity_mf = {
-            "move_slow_left": fuzz.trimf(self.velocity_universe, [-20, -20, -15]),
-            "left": fuzz.trimf(self.velocity_universe, [-15, -10, -2]),
+            "move_slow_right": fuzz.trimf(self.velocity_universe, [-20, -20, -15]),
+            "right": fuzz.trimf(self.velocity_universe, [-15, -10, -2]),
             "stay": fuzz.trimf(self.velocity_universe, [-2, 0, 2]),
-            "right": fuzz.trimf(self.velocity_universe, [2, 10, 15]),
-            "move_slow_right": fuzz.trimf(self.velocity_universe, [15, 20, 20]),
+            "left": fuzz.trimf(self.velocity_universe, [2, 10, 15]),
+            "move_slow_left": fuzz.trimf(self.velocity_universe, [15, 20, 20]),
         }
 
         self.visualize_mfs()
 
         self.velocity_fx = {
-            "move_slow_left": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
-            "left": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
+            "move_slow_right": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
+            "right": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
             "stay": lambda x_diff, y_diff: 0,
-            "right": lambda x_diff, y_diff: abs(x_diff) + y_diff,
-            "move_slow_right": lambda x_diff, y_diff: (abs(x_diff) + y_diff),
+            "left": lambda x_diff, y_diff: abs(x_diff) + y_diff,
+            "move_slow_left": lambda x_diff, y_diff: (abs(x_diff) + y_diff),
         }
 
+    def predict_ball_impact(self):
+        # Predict where the ball will hit the paddle
+        ball_future_x = self.ball.rect.centerx + (self.ball.x_speed * self.ball.rect.centery / abs(self.ball.y_speed))
+        return ball_future_x
 
     def act(self, x_diff: int, y_diff: int):
         velocity = self.make_decision(x_diff, y_diff)
@@ -369,14 +373,14 @@ class FuzzyPlayerTSK(Player):
 
         # Rule activations using Zadeh norms (min of x and y values)
         activations = {
-            "move_slow_right": max(
+            "move_slow_left": max(
                 [
                     min(x_vals["far_left"], y_vals["high"]),
                     min(x_vals["far_left"], y_vals["center"]),
                     min(x_vals["far_left"], y_vals["low"]),
                 ]
             ),
-            "right": max(
+            "left": max(
                 [
                     min(x_vals["left"], y_vals["high"]),
                     min(x_vals["left"], y_vals["center"]),
@@ -390,14 +394,14 @@ class FuzzyPlayerTSK(Player):
                     min(x_vals["center"], y_vals["low"]),
                 ]
             ),
-            "left": max(
+            "right": max(
                 [
                     min(x_vals["right"], y_vals["high"]),
                     min(x_vals["right"], y_vals["center"]),
                     min(x_vals["right"], y_vals["low"]),
                 ]
             ),
-            "move_slow_left": max(
+            "move_slow_right": max(
                 [
                     min(x_vals["far_right"], y_vals["high"]),
                     min(x_vals["far_right"], y_vals["center"]),
