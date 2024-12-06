@@ -320,11 +320,11 @@ class FuzzyPlayerTSK(Player):
         self.velocity_universe = np.arange(-20, 21, 1)
 
         self.x_mf = {
-            "far_left": fuzz.trimf(self.x_universe, [-400, -400, 0]),
-            "left": fuzz.trimf(self.x_universe, [-400, -200, 0]),
-            "center": fuzz.trimf(self.x_universe, [-10, 0, 10]),
-            "right": fuzz.trimf(self.x_universe, [0, 200, 400]),
-            "far_right": fuzz.trimf(self.x_universe, [0, 400, 400]),
+            "far_left": fuzz.trimf(self.x_universe, [-400, -400, -200]),
+            "left": fuzz.trimf(self.x_universe, [-400, -200, -40]),
+            "center": fuzz.trimf(self.x_universe, [-40, 0, 40]),
+            "right": fuzz.trimf(self.x_universe, [40, 200, 400]),
+            "far_right": fuzz.trimf(self.x_universe, [200, 400, 400]),
         }
 
         self.y_mf = {
@@ -335,9 +335,9 @@ class FuzzyPlayerTSK(Player):
 
         self.velocity_mf = {
             "move_slow_right": fuzz.trimf(self.velocity_universe, [-20, -20, -15]),
-            "right": fuzz.trimf(self.velocity_universe, [-15, -10, -2]),
-            "stay": fuzz.trimf(self.velocity_universe, [-2, 0, 2]),
-            "left": fuzz.trimf(self.velocity_universe, [2, 10, 15]),
+            "right": fuzz.trimf(self.velocity_universe, [-15, -10, -5]),
+            "stay": fuzz.trimf(self.velocity_universe, [-5, 0, 5]),
+            "left": fuzz.trimf(self.velocity_universe, [5, 10, 15]),
             "move_slow_left": fuzz.trimf(self.velocity_universe, [15, 20, 20]),
         }
 
