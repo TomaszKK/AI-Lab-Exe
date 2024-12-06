@@ -320,11 +320,12 @@ class FuzzyPlayerTSK(Player):
         self.velocity_universe = np.arange(-20, 21, 1)
 
         self.x_mf = {
-            "far_left": fuzz.trimf(self.x_universe, [-400, -400, 0]),
-            "left": fuzz.trimf(self.x_universe, [-400, -200, 0]),
-            "center": fuzz.trimf(self.x_universe, [-10, 0, 10]),
-            "right": fuzz.trimf(self.x_universe, [0, 200, 400]),
-            "far_right": fuzz.trimf(self.x_universe, [0, 400, 400]),
+            "far_left": fuzz.trimf(self.x_universe, [-400, -400, -40]),
+            "left": fuzz.trimf(self.x_universe, [-400, -200, -40]),
+            "center_l": fuzz.trimf(self.x_universe, [-40, 0, 0]), #middle maybe 20
+            "center_r": fuzz.trimf(self.x_universe, [0, 0, 40]),
+            "right": fuzz.trimf(self.x_universe, [50, 200, 400]),
+            "far_right": fuzz.trimf(self.x_universe, [40, 400, 400]),
         }
 
         self.y_mf = {
@@ -334,11 +335,12 @@ class FuzzyPlayerTSK(Player):
         }
 
         self.velocity_mf = {
-            "move_slow_right": fuzz.trimf(self.velocity_universe, [-20, -20, -15]),
-            "right": fuzz.trimf(self.velocity_universe, [-15, -10, -2]),
-            "stay": fuzz.trimf(self.velocity_universe, [-2, 0, 2]),
-            "left": fuzz.trimf(self.velocity_universe, [2, 10, 15]),
-            "move_slow_left": fuzz.trimf(self.velocity_universe, [15, 20, 20]),
+            "move_slow_left": fuzz.trimf(self.velocity_universe, [-20, -20, -15]),
+            "left": fuzz.trimf(self.velocity_universe, [-15, -15, -5]),
+            "stay_l": fuzz.trimf(self.velocity_universe, [-5, -5, 0]),
+            "stay_r": fuzz.trimf(self.velocity_universe, [0, 5, 5]),
+            "right": fuzz.trimf(self.velocity_universe, [5, 15, 15]),
+            "move_slow_right": fuzz.trimf(self.velocity_universe, [15, 20, 20]),
         }
 
         self.visualize_mfs()
@@ -346,7 +348,8 @@ class FuzzyPlayerTSK(Player):
         self.velocity_fx = {
             "move_slow_right": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
             "right": lambda x_diff, y_diff: -1 * (abs(x_diff) + y_diff),
-            "stay": lambda x_diff, y_diff: 0,
+            "stay_l": lambda x_diff, y_diff: 0,
+            "stay_r": lambda x_diff, y_diff: 0,
             "left": lambda x_diff, y_diff: abs(x_diff) + y_diff,
             "move_slow_left": lambda x_diff, y_diff: (abs(x_diff) + y_diff),
         }
@@ -385,13 +388,23 @@ class FuzzyPlayerTSK(Player):
                     min(x_vals["left"], y_vals["high"]),
                     min(x_vals["left"], y_vals["center"]),
                     min(x_vals["left"], y_vals["low"]),
+                    # min(x_vals["center_r"], y_vals["high"]),
+                    # min(x_vals["center_r"], y_vals["center"]),
+                    # min(x_vals["center_r"], y_vals["low"]),
                 ]
             ),
-            "stay": max(
+            "stay_l": max(
                 [
-                    min(x_vals["center"], y_vals["high"]),
-                    min(x_vals["center"], y_vals["center"]),
-                    min(x_vals["center"], y_vals["low"]),
+                    min(x_vals["center_r"], y_vals["high"]),
+                    min(x_vals["center_r"], y_vals["center"]),
+                    min(x_vals["center_r"], y_vals["low"]),
+                ]
+            ),
+            "stay_r": max(
+                [
+                    min(x_vals["center_l"], y_vals["high"]),
+                    min(x_vals["center_l"], y_vals["center"]),
+                    min(x_vals["center_l"], y_vals["low"]),
                 ]
             ),
             "right": max(
@@ -399,6 +412,9 @@ class FuzzyPlayerTSK(Player):
                     min(x_vals["right"], y_vals["high"]),
                     min(x_vals["right"], y_vals["center"]),
                     min(x_vals["right"], y_vals["low"]),
+                    # min(x_vals["center_l"], y_vals["high"]),
+                    # min(x_vals["center_l"], y_vals["center"]),
+                    # min(x_vals["center_l"], y_vals["low"]),
                 ]
             ),
             "move_slow_right": max(
